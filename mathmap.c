@@ -502,7 +502,7 @@ register_expression_db (expression_db_t *edb, char *symbol_prefix, char *menu_pr
 	    fprintf(stderr, "registering %s (%s)\n", symbol, menu);
 #endif
 
-	    gimp_install_procedure(symbol,
+	    gimp_install_temp_proc(symbol,
 				   "Generate an image using a mathematical expression.",
 				   "Generates an image by means of a mathematical expression. The expression "
 				   "can also refer to the data of an original image. Thus, arbitrary "
@@ -512,11 +512,13 @@ register_expression_db (expression_db_t *edb, char *symbol_prefix, char *menu_pr
 				   MATHMAP_DATE ", " MATHMAP_VERSION,
 				   menu,
 				   "RGB*, GRAY*",
-				   GIMP_PLUGIN,
+				   GIMP_TEMPORARY,
 				   nargs,
 				   nreturn_vals,
 				   args,
-				   return_vals);
+				   return_vals,
+				   run			   
+		);
 	}
 
 	g_free(menu);
@@ -609,7 +611,26 @@ query(void)
 			   args,
 			   return_vals);
 
-    register_examples();
+	{
+    gimp_install_procedure("plug_in_mathmap_ext",
+			   "Generate an image using a mathematical expression.",
+			   "Generates an image by means of a mathematical expression. The expression "
+			   "can also refer to the data of an original image. Thus, arbitrary "
+			   "distortions can be constructed. Even animations can be generated.",
+			   "Mark Probst",
+			   "Mark Probst",
+			   MATHMAP_DATE ", " MATHMAP_VERSION,
+			   "<Image>/Filters/Generic/MathMap/MathMapExt",
+			   "RGB*, GRAY*",
+			   GIMP_EXTENSION,
+			   0,
+			   0,
+			   NULL,
+			   NULL);
+
+	}
+
+    // register_examples();
 }
 
 /*****/
@@ -617,6 +638,30 @@ query(void)
 static void
 run (const gchar *name, gint nparams, const GimpParam *param, gint *nreturn_vals, GimpParam **return_vals)
 {
+static int first = 1;
+	printf("RUN: %s\n", name);
+
+	// extension 
+	if (! strcmp(name, "plug_in_mathmap_ext")) {
+    	register_examples();
+		gimp_extension_ack();
+		while (1) {
+			printf("EXT before process\n");
+			gimp_extension_process(0); // ms
+			printf("EXT after process\n");
+			if (first) { // // uninstalling non-existent proc crashes gimp
+				first = 0;
+				// as a test we remove one of the filters from menu,
+				// the filter will disappear after running any mathmap procedure for the first time
+				printf("Uninstalling filter mathmap_colors_alpha_to_gray\n");
+				gimp_uninstall_temp_proc("mathmap_colors_alpha_to_gray");
+			}
+		}
+		return;
+	}
+
+	// 'normal' procedures
+
     static GimpParam values[1];
 
     GimpPDBStatusType status;
@@ -696,8 +741,11 @@ run (const gchar *name, gint nparams, const GimpParam *param, gint *nreturn_vals
 
 	    update_gradient();
 
-	    if (!mathmap_dialog(mutable_expression))
-		return;
+		printf("Before filter run\n");
+	    int ret = mathmap_dialog(mutable_expression);
+		printf("After filterr run: %d\n", ret);
+		if (! ret);
+			return;
 
 	    break;
 
